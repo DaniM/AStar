@@ -31,6 +31,10 @@
 #include <math.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct __ASNeighborList {
     const ASPathNodeSource *source;
     size_t capacity;
@@ -83,7 +87,7 @@ static const Node NodeNull = {NULL, -1};
 
 static inline VisitedNodes VisitedNodesCreate(const ASPathNodeSource *source, void *context)
 {
-    VisitedNodes nodes = calloc(1, sizeof(struct __VisitedNodes));
+    VisitedNodes nodes = (VisitedNodes)calloc(1, sizeof(struct __VisitedNodes));
     nodes->source = source;
     nodes->context = context;
     return nodes;
@@ -109,7 +113,7 @@ static inline Node NodeMake(VisitedNodes nodes, size_t index)
 
 static inline NodeRecord *NodeGetRecord(Node node)
 {
-    return node.nodes->nodeRecords + (node.index * (node.nodes->source->nodeSize + sizeof(NodeRecord)));
+    return (NodeRecord*)(node.nodes->nodeRecords + (node.index * (node.nodes->source->nodeSize + sizeof(NodeRecord))));
 }
 
 static inline void *GetNodeKey(Node node)
@@ -249,7 +253,7 @@ static inline Node GetNode(VisitedNodes nodes, void *nodeKey)
     if (nodes->nodeRecordsCount == nodes->nodeRecordsCapacity) {
         nodes->nodeRecordsCapacity = 1 + (nodes->nodeRecordsCapacity * 2);
         nodes->nodeRecords = realloc(nodes->nodeRecords, nodes->nodeRecordsCapacity * (sizeof(NodeRecord) + nodes->source->nodeSize));
-        nodes->nodeRecordsIndex = realloc(nodes->nodeRecordsIndex, nodes->nodeRecordsCapacity * sizeof(size_t));
+        nodes->nodeRecordsIndex = (size_t*)realloc(nodes->nodeRecordsIndex, nodes->nodeRecordsCapacity * sizeof(size_t));
     }
     
     Node node = NodeMake(nodes, nodes->nodeRecordsCount);
@@ -345,7 +349,7 @@ static inline void AddNodeToOpenSet(Node n, float cost, Node parent)
 
     if (n.nodes->openNodesCount == n.nodes->openNodesCapacity) {
         n.nodes->openNodesCapacity = 1 + (n.nodes->openNodesCapacity * 2);
-        n.nodes->openNodes = realloc(n.nodes->openNodes, n.nodes->openNodesCapacity * sizeof(size_t));
+        n.nodes->openNodes = (size_t*)realloc(n.nodes->openNodes, n.nodes->openNodesCapacity * sizeof(size_t));
     }
 
     const size_t openIndex = n.nodes->openNodesCount;
@@ -371,7 +375,7 @@ static inline Node GetOpenNode(VisitedNodes nodes)
 
 static inline ASNeighborList NeighborListCreate(const ASPathNodeSource *source)
 {
-    ASNeighborList list = calloc(1, sizeof(struct __ASNeighborList));
+    ASNeighborList list = (ASNeighborList)calloc(1, sizeof(struct __ASNeighborList));
     list->source = source;
     return list;
 }
@@ -399,7 +403,7 @@ void ASNeighborListAdd(ASNeighborList list, void *node, float edgeCost)
 {
     if (list->count == list->capacity) {
         list->capacity = 1 + (list->capacity * 2);
-        list->costs = realloc(list->costs, sizeof(float) * list->capacity);
+        list->costs = (float*)realloc(list->costs, sizeof(float) * list->capacity);
         list->nodeKeys = realloc(list->nodeKeys, list->source->nodeSize * list->capacity);
     }
     list->costs[list->count] = edgeCost;
@@ -444,8 +448,8 @@ ASPath ASPathCreate(const ASPathNodeSource *source, void *context, void *startNo
         
         neighborList->count = 0;
         source->nodeNeighbors(neighborList, GetNodeKey(current), context);
-
-        for (size_t n=0; n<neighborList->count; n++) {
+        size_t n;
+        for (n=0; n<neighborList->count; n++) {
             const float cost = GetNodeCost(current) + NeighborListGetEdgeCost(neighborList, n);
             Node neighbor = GetNode(visitedNodes, NeighborListGetNodeKey(neighborList, n));
             
@@ -480,13 +484,14 @@ ASPath ASPathCreate(const ASPathNodeSource *source, void *context, void *startNo
             n = GetParentNode(n);
         }
         
-        path = malloc(sizeof(struct __ASPath) + (count * source->nodeSize));
+        path = (ASPath)malloc(sizeof(struct __ASPath) + (count * source->nodeSize));
         path->nodeSize = source->nodeSize;
         path->count = count;
         path->cost = GetNodeCost(current);
         
         n = current;
-        for (size_t i=count; i>0; i--) {
+        size_t i;
+        for (i=count; i>0; i--) {
             memcpy(path->nodeKeys + ((i - 1) * source->nodeSize), GetNodeKey(n), source->nodeSize);
             n = GetParentNode(n);
         }
@@ -507,7 +512,7 @@ ASPath ASPathCopy(ASPath path)
 {
     if (path) {
         const size_t size = sizeof(struct __ASPath) + (path->count * path->nodeSize);
-        ASPath newPath = malloc(size);
+        ASPath newPath = (ASPath)malloc(size);
         memcpy(newPath, path, size);
         return newPath;
     } else {
@@ -529,3 +534,7 @@ void *ASPathGetNode(ASPath path, size_t index)
 {
     return (path && index < path->count)? (path->nodeKeys + (index * path->nodeSize)) : NULL;
 }
+
+#ifdef __cplusplus
+}
+#endif
